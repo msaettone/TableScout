@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+:root {
+  /* Backgrounds */
+  --color-bg: #faf9f7;
+  --color-bg-secondary: #f5f4ef;
+  --color-card: #ffffff;
+  --color-neutral-soft: #eeece5;
+  --color-border: #e8e7e2;
+
+  /* Text */
+  --color-text-primary: #1f2933;
+  --color-text-secondary: #667085;
+  --color-text-muted: #98a2b3;
+  --color-text-tertiary: #475467;
+
+  /* Coral (primary accent) */
+  --color-coral: #f05a47;
+  --color-coral-hover: #dc4938;
+  --color-coral-soft: #fff0ec;
+
+  /* Success */
+  --color-success: #48a985;
+  --color-success-hover: #398f70;
+  --color-success-soft: #eaf7f1;
+
+  /* Information */
+  --color-info: #5b8def;
+  --color-info-soft: #edf4ff;
+
+  /* Warning */
+  --color-warning: #e9a23b;
+  --color-warning-soft: #fff7e8;
+
+  /* Violet (booking in progress) */
+  --color-violet: #8b7ff0;
+  --color-violet-soft: #f1eeff;
+
+  /* Neutral / expired */
+  --color-neutral: #98a2b3;
+  --color-neutral-strong: #667085;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px rgba(31, 41, 51, 0.04), 0 4px 16px rgba(31, 41, 51, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(31, 41, 51, 0.05), 0 8px 24px rgba(31, 41, 51, 0.08);
+
+  /* Layout */
+  --max-content-width: 1240px;
+
+  --font-serif: "Instrument Serif", Georgia, serif;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-card: var(--color-card);
+  --color-neutral-soft: var(--color-neutral-soft);
+  --color-border: var(--color-border);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-tertiary: var(--color-text-tertiary);
+
+  --color-coral: var(--color-coral);
+  --color-coral-hover: var(--color-coral-hover);
+  --color-coral-soft: var(--color-coral-soft);
+
+  --color-success: var(--color-success);
+  --color-success-hover: var(--color-success-hover);
+  --color-success-soft: var(--color-success-soft);
+
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
+
+  --color-warning: var(--color-warning);
+  --color-warning-soft: var(--color-warning-soft);
+
+  --color-violet: var(--color-violet);
+  --color-violet-soft: var(--color-violet-soft);
+
+  --color-neutral: var(--color-neutral);
+  --color-neutral-strong: var(--color-neutral-strong);
+
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-serif);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-pill: var(--radius-pill);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 1.6s ease-in-out infinite;
+}

@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  phone              String    @unique
+  resyAuthTokenEnc   String?
+  resyTokenUpdatedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  sessions           Session[]
+  watches            Watch[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Restaurant {
+  id           String   @id @default(cuid())
+  name         String
+  cuisine      String
+  neighborhood String
+  priceRange   String
+  imageUrl     String?
+  resyVenueId  String?  @unique
+  createdAt    DateTime @default(now())
+  watches      Watch[]
+}
+
+enum WatchStatus {
+  WATCHING
+  RELEASE_APPROACHING
+  STRIKE_MODE
+  BOOKING
+  BOOKED
+  ACTION_NEEDED
+  EXPIRED
+}
+
+model Watch {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id])
+  restaurantId      String
+  restaurant        Restaurant     @relation(fields: [restaurantId], references: [id])
+  targetDate        DateTime
+  partySize         Int
+  preferredTimes    String[]
+  releaseAt         DateTime
+  status            WatchStatus    @default(WATCHING)
+  confirmedTime     String?
+  matchedSlotToken  String?
+  matchedSlotTime   String?
+  resyReservationId String?
+  lastCheckedAt     DateTime?
+  nextCheckAt       DateTime       @default(now())
+  lastBookingError  String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  notifications     Notification[]
+
+  @@index([userId])
+  @@index([status, nextCheckAt])
+}
+
+enum NotificationType {
+  INFO
+  RELEASE_APPROACHING
+  STRIKE_MODE
+  BOOKED
+  ACTION_NEEDED
+  EXPIRED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  watchId   String
+  watch     Watch            @relation(fields: [watchId], references: [id])
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  smsSentAt DateTime?
+  createdAt DateTime         @default(now())
+}
