@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireUserOrResponse } from "@/lib/auth";
 import { tick } from "@/lib/watchEngine";
 
 export async function GET(
@@ -8,7 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   await tick();
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
   const { id } = await params;
 
   const watch = await prisma.watch.findUnique({
@@ -28,7 +30,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
   const { id } = await params;
 
   const watch = await prisma.watch.findUnique({ where: { id, userId: user.id } });

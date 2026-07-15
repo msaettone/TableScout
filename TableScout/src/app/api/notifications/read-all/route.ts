@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireUserOrResponse } from "@/lib/auth";
 
 export async function POST() {
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
+
   await prisma.notification.updateMany({
     where: { read: false, watch: { userId: user.id } },
     data: { read: true },

@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/settings", label: "Settings" },
   { href: "/design-system", label: "Design system" },
 ];
 

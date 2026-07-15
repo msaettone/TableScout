@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { RestaurantCombobox } from "@/components/RestaurantCombobox";
 import type { Restaurant } from "@prisma/client";
 
 const TIME_SLOTS = [
@@ -26,23 +27,13 @@ function inMinutes(min: number) {
 
 export default function NewWatchPage() {
   const router = useRouter();
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [restaurantId, setRestaurantId] = useState("");
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [partySize, setPartySize] = useState(2);
   const [targetDate, setTargetDate] = useState(todayPlusDays(7));
   const [releaseAt, setReleaseAt] = useState(inMinutes(10));
   const [times, setTimes] = useState<string[]>(["19:00"]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch("/api/restaurants")
-      .then((r) => r.json())
-      .then((data) => {
-        setRestaurants(data);
-        if (data.length > 0) setRestaurantId(data[0].id);
-      });
-  }, []);
 
   function toggleTime(t: string) {
     setTimes((prev) =>
@@ -54,8 +45,8 @@ export default function NewWatchPage() {
     e.preventDefault();
     setError("");
 
-    if (!restaurantId) {
-      setError("Choose a restaurant to watch.");
+    if (!restaurant) {
+      setError("Search for and choose a restaurant to watch.");
       return;
     }
     if (times.length === 0) {
@@ -68,7 +59,7 @@ export default function NewWatchPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        restaurantId,
+        restaurantId: restaurant.id,
         partySize,
         preferredTimes: times,
         targetDate: new Date(targetDate).toISOString(),
@@ -95,22 +86,13 @@ export default function NewWatchPage() {
 
       <form onSubmit={onSubmit} className="mt-8 space-y-6">
         <Card>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-(--color-text-primary)">
-              Restaurant
-            </span>
-            <select
-              value={restaurantId}
-              onChange={(e) => setRestaurantId(e.target.value)}
-              className="h-11 w-full rounded-(--radius-md) border border-(--color-border) bg-white px-3 text-sm text-(--color-text-primary) focus:border-(--color-coral) focus:outline-none focus:ring-2 focus:ring-(--color-coral-soft)"
-            >
-              {restaurants.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} · {r.neighborhood}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="mb-1.5 block text-sm font-medium text-(--color-text-primary)">
+            Restaurant
+          </span>
+          <RestaurantCombobox onSelect={setRestaurant} />
+          <p className="mt-1.5 text-xs text-(--color-text-muted)">
+            Searches Resy directly — requires your Resy account connected in Settings.
+          </p>
         </Card>
 
         <Card className="space-y-5">
@@ -171,7 +153,7 @@ export default function NewWatchPage() {
         <Card>
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-(--color-text-primary)">
-              Reservation window opens at
+              Your best guess for the release time
             </span>
             <input
               type="datetime-local"
@@ -180,8 +162,8 @@ export default function NewWatchPage() {
               className="h-11 w-full rounded-(--radius-md) border border-(--color-border) bg-white px-3 text-sm text-(--color-text-primary) focus:border-(--color-coral) focus:outline-none focus:ring-2 focus:ring-(--color-coral-soft)"
             />
             <span className="mt-1.5 block text-xs text-(--color-text-muted)">
-              Usually set by the restaurant — for this demo, pick a time a few minutes out to
-              watch Strike Mode activate.
+              We poll Resy for real availability regardless — this just controls how often we
+              check as the estimate approaches.
             </span>
           </label>
         </Card>

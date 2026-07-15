@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireUserOrResponse } from "@/lib/auth";
 import { tick } from "@/lib/watchEngine";
 
 export async function GET() {
   await tick();
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
 
   const notifications = await prisma.notification.findMany({
     where: { watch: { userId: user.id } },

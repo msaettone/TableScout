@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireUserOrResponse } from "@/lib/auth";
 import { tick } from "@/lib/watchEngine";
 import { NotificationType, WatchStatus } from "@prisma/client";
 
@@ -16,7 +16,9 @@ const STATUS_PRIORITY: Record<WatchStatus, number> = {
 
 export async function GET() {
   await tick();
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
 
   const watches = await prisma.watch.findMany({
     where: { userId: user.id },
@@ -33,7 +35,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const auth = await requireUserOrResponse();
+  if ("response" in auth) return auth.response;
+  const { user } = auth;
   const body = await req.json();
   const { restaurantId, partySize, preferredTimes, targetDate, releaseAt } = body;
 

@@ -17,6 +17,17 @@ model User {
   updatedAt          DateTime  @updatedAt
   sessions           Session[]
   watches            Watch[]
+  pushSubscriptions  PushSubscription[]
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
 }
 
 model Session {
@@ -85,12 +96,12 @@ enum NotificationType {
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  watchId   String
-  watch     Watch            @relation(fields: [watchId], references: [id])
-  type      NotificationType
-  message   String
-  read      Boolean          @default(false)
-  smsSentAt DateTime?
-  createdAt DateTime         @default(now())
+  id         String           @id @default(cuid())
+  watchId    String
+  watch      Watch            @relation(fields: [watchId], references: [id])
+  type       NotificationType
+  message    String
+  read       Boolean          @default(false)
+  pushSentAt DateTime?
+  createdAt  DateTime         @default(now())
 }

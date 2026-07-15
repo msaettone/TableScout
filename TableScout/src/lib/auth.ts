@@ -1,16 +1,35 @@
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { SESSION_COOKIE, getUserForSessionToken } from "@/lib/session";
+import type { User } from "@prisma/client";
 
-// TEMPORARY (Phase 1 only): there's no real session/login yet, so every
-// request is attributed to one seeded placeholder user. Phase 2 replaces
-// this implementation with real cookie/session-backed lookups — callers
-// (API routes) already call requireUser() the same way real auth will need,
-// so nothing at the call sites should need to change when that lands.
-const DEMO_PHONE = "+10000000000";
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("Unauthorized");
+    this.name = "UnauthorizedError";
+  }
+}
+
+export async function getCurrentUser() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  return getUserForSessionToken(token);
+}
 
 export async function requireUser() {
-  const user = await prisma.user.findUnique({ where: { phone: DEMO_PHONE } });
-  if (!user) {
-    throw new Error("Demo user not seeded — run `npm run db:seed`.");
-  }
+  const user = await getCurrentUser();
+  if (!user) throw new UnauthorizedError();
   return user;
+}
+
+/** For API routes: `const auth = await requireUserOrResponse(); if ("response" in auth) return auth.response;` */
+export async function requireUserOrResponse(): Promise<
+  { user: User } | { response: NextResponse }
+> {
+  try {
+    return { user: await requireUser() };
+  } catch {
+    return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
 }

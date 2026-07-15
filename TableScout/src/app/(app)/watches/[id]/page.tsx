@@ -31,13 +31,22 @@ type NotificationItem = {
 
 type WatchDetail = {
   id: string;
-  restaurant: { id: string; name: string; cuisine: string; neighborhood: string; priceRange: string };
+  restaurant: {
+    id: string;
+    name: string;
+    cuisine: string;
+    neighborhood: string;
+    priceRange: string;
+    resyVenueId: string | null;
+  };
   targetDate: string;
   partySize: number;
   preferredTimes: string[];
   releaseAt: string;
   status: string;
   confirmedTime: string | null;
+  matchedSlotTime: string | null;
+  lastBookingError: string | null;
   notifications: NotificationItem[];
 };
 
@@ -59,6 +68,7 @@ export default function WatchDetailPage({
   const router = useRouter();
   const [watch, setWatch] = useState<WatchDetail | null>(null);
   const [booking, setBooking] = useState(false);
+  const [bookError, setBookError] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/watches/${id}`);
@@ -74,7 +84,12 @@ export default function WatchDetailPage({
 
   async function onBook() {
     setBooking(true);
-    await fetch(`/api/watches/${id}/book`, { method: "POST" });
+    setBookError("");
+    const res = await fetch(`/api/watches/${id}/book`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setBookError(body.error ?? "Booking failed — someone may have beaten you to it.");
+    }
     await load();
     setBooking(false);
   }
@@ -146,10 +161,17 @@ export default function WatchDetailPage({
             className={`mt-2 block font-serif text-6xl ${isStrike ? "animate-soft-pulse text-(--color-coral)" : "text-(--color-text-primary)"}`}
           />
           <p className="mt-2 text-sm text-(--color-text-secondary)">
-            {isStrike
-              ? "The booking window is opening now. Tap below to claim your table."
-              : "The release window opened. Confirm now before it's gone."}
+            {watch.restaurant.resyVenueId
+              ? isStrike
+                ? `A table opened${watch.matchedSlotTime ? ` at ${watch.matchedSlotTime}` : ""} but needs a deposit — we can't charge you automatically, so tap below or book it directly on Resy.`
+                : "Our estimate passed with nothing found yet — we're still checking, or try booking directly."
+              : isStrike
+                ? "The booking window is opening now. Tap below to claim your table."
+                : "The release window opened. Confirm now before it's gone."}
           </p>
+          {bookError && (
+            <p className="mt-2 text-sm font-medium text-(--color-coral-hover)">{bookError}</p>
+          )}
           <Button
             onClick={onBook}
             disabled={booking}
