@@ -18,7 +18,7 @@ export default async function SettingsPage() {
         <Card className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-(--color-text-primary)">Signed in as</p>
-            <p className="mt-1 text-sm text-(--color-text-secondary)">{user?.phone}</p>
+            <p className="mt-1 text-sm text-(--color-text-secondary)">{user?.email}</p>
           </div>
           <LogoutButton />
         </Card>

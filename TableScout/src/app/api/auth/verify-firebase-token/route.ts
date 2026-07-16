@@ -11,22 +11,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing idToken." }, { status: 400 });
   }
 
-  let phone: string | undefined;
+  let email: string | undefined;
   try {
     const decoded = await getFirebaseAdminAuth().verifyIdToken(idToken);
-    phone = decoded.phone_number;
+    // Email-link sign-in only issues a token after the user proved control
+    // of the inbox by clicking the link, so email_verified is always true
+    // here — checked anyway since this claim is what we trust as identity.
+    if (decoded.email_verified) email = decoded.email;
   } catch {
     return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
   }
 
-  if (!phone) {
-    return NextResponse.json({ error: "Token did not include a verified phone number." }, { status: 400 });
+  if (!email) {
+    return NextResponse.json({ error: "Token did not include a verified email." }, { status: 400 });
   }
 
   const user = await prisma.user.upsert({
-    where: { phone },
+    where: { email },
     update: {},
-    create: { phone },
+    create: { email },
   });
 
   const sessionToken = await createSession(user.id);

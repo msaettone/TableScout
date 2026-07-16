@@ -10,7 +10,7 @@ datasource db {
 
 model User {
   id                 String    @id @default(cuid())
-  phone              String    @unique
+  email              String    @unique
   resyAuthTokenEnc   String?
   resyTokenUpdatedAt DateTime?
   createdAt          DateTime  @default(now())

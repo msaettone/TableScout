@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
 import { SESSION_COOKIE } from "@/lib/sessionCookie";
 
-// Local-dev-only convenience: skips real phone/OTP verification entirely.
+// Local-dev-only convenience: skips real email-link verification entirely.
 // Disabled outside development so this can never ship as a real backdoor.
 export async function POST() {
   if (process.env.NODE_ENV === "production") {
@@ -12,9 +12,9 @@ export async function POST() {
   }
 
   const user = await prisma.user.upsert({
-    where: { phone: "+15559990000" },
+    where: { email: "dev@tablescout.test" },
     update: {},
-    create: { phone: "+15559990000" },
+    create: { email: "dev@tablescout.test" },
   });
 
   const sessionToken = await createSession(user.id);

@@ -1,9 +1,13 @@
 "use client";
 
-import { useRef, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RecaptchaVerifier, signInWithPhoneNumberShim } from "@/lib/firebasePhoneAuth";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
+import {
+  sendLoginLink,
+  isLoginLink,
+  getStoredEmail,
+  completeLoginLink,
+} from "@/lib/firebaseEmailAuth";
 import { Logo } from "@/components/Logo";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -13,70 +17,19 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/dashboard";
 
-  const [step, setStep] = useState<"phone" | "code">("phone");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "sent" | "confirm" | "completing">("email");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [recaptchaKey, setRecaptchaKey] = useState(0);
-  const confirmationRef = useRef<import("firebase/auth").ConfirmationResult | null>(null);
-  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+  const completingRef = useRef(false);
 
-  async function onDevSkip() {
-    setSubmitting(true);
-    await fetch("/api/auth/dev-login", { method: "POST" });
-    router.push(nextPath);
-    router.refresh();
-  }
-
-  async function onSubmitPhone(e: React.FormEvent) {
-    e.preventDefault();
+  async function finishSignIn(withEmail: string) {
+    if (completingRef.current) return;
+    completingRef.current = true;
+    setStep("completing");
     setError("");
-
-    const parsed = parsePhoneNumberFromString(phone, "US");
-    if (!parsed?.isValid()) {
-      setError("Enter a valid phone number.");
-      return;
-    }
-
-    setSubmitting(true);
     try {
-      confirmationRef.current = await signInWithPhoneNumberShim(
-        parsed.number,
-        recaptchaRef,
-        "recaptcha-container"
-      );
-      setStep("code");
-    } catch (err) {
-      console.error("signInWithPhoneNumber failed:", err);
-      const code = (err as { code?: string })?.code;
-      setError(
-        code
-          ? `Couldn't send a code (${code}). Try again.`
-          : "Couldn't send a code to that number. Try again."
-      );
-      // Force a fresh DOM node for reCAPTCHA to render into next attempt —
-      // Firebase's clear() alone can leave stale widget markup behind,
-      // which crashes the *next* render into the same container.
-      setRecaptchaKey((k) => k + 1);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function onSubmitCode(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-
-    if (!confirmationRef.current) {
-      setError("Session expired — request a new code.");
-      setStep("phone");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const credential = await confirmationRef.current.confirm(code);
+      const credential = await completeLoginLink(withEmail, window.location.href);
       const idToken = await credential.user.getIdToken();
 
       const res = await fetch("/api/auth/verify-firebase-token", {
@@ -89,12 +42,69 @@ function LoginForm() {
       router.push(nextPath);
       router.refresh();
     } catch (err) {
-      console.error("code verification failed:", err);
+      console.error("email link sign-in failed:", err);
       const code = (err as { code?: string })?.code;
-      setError(code ? `That code didn't work (${code}).` : "That code didn't work. Try again.");
+      setError(
+        code
+          ? `That link didn't work (${code}). Request a new one.`
+          : "That link didn't work. Request a new one."
+      );
+      completingRef.current = false;
+      setStep("email");
+    }
+  }
+
+  useEffect(() => {
+    if (!isLoginLink(window.location.href)) return;
+
+    const storedEmail = getStoredEmail();
+    if (storedEmail) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- kicking off async completion on mount
+      finishSignIn(storedEmail);
+    } else {
+      // Link opened on a different device/browser than it was requested
+      // from — ask them to confirm the email it was sent to.
+      setStep("confirm");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function onSubmitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (!email.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await sendLoginLink(email, nextPath);
+      setStep("sent");
+    } catch (err) {
+      console.error("sendSignInLinkToEmail failed:", err);
+      const code = (err as { code?: string })?.code;
+      setError(code ? `Couldn't send a link (${code}). Try again.` : "Couldn't send a link. Try again.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onSubmitConfirm(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    await finishSignIn(email);
+  }
+
+  async function onDevSkip() {
+    setSubmitting(true);
+    await fetch("/api/auth/dev-login", { method: "POST" });
+    router.push(nextPath);
+    router.refresh();
   }
 
   return (
@@ -104,67 +114,79 @@ function LoginForm() {
       </div>
 
       <Card>
-        {step === "phone" ? (
-          <form onSubmit={onSubmitPhone} className="space-y-4">
+        {step === "email" && (
+          <form onSubmit={onSubmitEmail} className="space-y-4">
             <div>
               <h1 className="font-serif text-2xl text-(--color-text-primary)">Sign in</h1>
               <p className="mt-1 text-sm text-(--color-text-secondary)">
-                We&apos;ll text you a one-time code.
+                We&apos;ll email you a sign-in link — no password needed.
               </p>
             </div>
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-(--color-text-primary)">
-                Phone number
+                Email address
               </span>
               <input
-                type="tel"
-                autoComplete="tel"
-                placeholder="(555) 123-4567"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="h-11 w-full rounded-(--radius-md) border border-(--color-border) bg-white px-3 text-sm text-(--color-text-primary) focus:border-(--color-coral) focus:outline-none focus:ring-2 focus:ring-(--color-coral-soft)"
               />
             </label>
             {error && <p className="text-sm text-(--color-coral)">{error}</p>}
-            <div key={recaptchaKey} id="recaptcha-container" />
             <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? "Sending…" : "Send code"}
+              {submitting ? "Sending…" : "Send sign-in link"}
             </Button>
           </form>
-        ) : (
-          <form onSubmit={onSubmitCode} className="space-y-4">
+        )}
+
+        {step === "sent" && (
+          <div className="space-y-3 text-center">
+            <h1 className="font-serif text-2xl text-(--color-text-primary)">Check your email</h1>
+            <p className="text-sm text-(--color-text-secondary)">
+              We sent a sign-in link to <span className="font-medium">{email}</span>. Open it on
+              this device to finish signing in.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStep("email")}
+              className="text-sm text-(--color-coral) hover:text-(--color-coral-hover)"
+            >
+              Use a different email
+            </button>
+          </div>
+        )}
+
+        {step === "confirm" && (
+          <form onSubmit={onSubmitConfirm} className="space-y-4">
             <div>
-              <h1 className="font-serif text-2xl text-(--color-text-primary)">Enter code</h1>
+              <h1 className="font-serif text-2xl text-(--color-text-primary)">Confirm your email</h1>
               <p className="mt-1 text-sm text-(--color-text-secondary)">
-                Sent to {phone}.{" "}
-                <button
-                  type="button"
-                  onClick={() => setStep("phone")}
-                  className="text-(--color-coral) hover:text-(--color-coral-hover)"
-                >
-                  Change
-                </button>
+                This link was opened in a different browser than it was requested from — enter
+                your email to finish signing in.
               </p>
             </div>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-(--color-text-primary)">
-                6-digit code
-              </span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="h-11 w-full rounded-(--radius-md) border border-(--color-border) bg-white px-3 text-center text-lg tracking-[0.5em] text-(--color-text-primary) focus:border-(--color-coral) focus:outline-none focus:ring-2 focus:ring-(--color-coral-soft)"
-              />
-            </label>
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-11 w-full rounded-(--radius-md) border border-(--color-border) bg-white px-3 text-sm text-(--color-text-primary) focus:border-(--color-coral) focus:outline-none focus:ring-2 focus:ring-(--color-coral-soft)"
+            />
             {error && <p className="text-sm text-(--color-coral)">{error}</p>}
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? "Verifying…" : "Verify & sign in"}
+            <Button type="submit" className="w-full">
+              Continue
             </Button>
           </form>
+        )}
+
+        {step === "completing" && (
+          <div className="space-y-2 text-center">
+            <p className="text-sm text-(--color-text-secondary)">Signing you in…</p>
+          </div>
         )}
       </Card>
 
@@ -174,7 +196,7 @@ function LoginForm() {
           disabled={submitting}
           className="mt-4 text-center text-xs text-(--color-text-muted) hover:text-(--color-coral)"
         >
-          Skip phone login (dev only)
+          Skip email login (dev only)
         </button>
       )}
     </div>

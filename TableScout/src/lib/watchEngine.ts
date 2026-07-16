@@ -25,7 +25,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function tick() {
+export async function tick(limit?: number) {
   const now = Date.now();
 
   const watches = await prisma.watch.findMany({
@@ -33,6 +33,11 @@ export async function tick() {
       status: { notIn: [WatchStatus.BOOKED, WatchStatus.EXPIRED] },
       nextCheckAt: { lte: new Date(now) },
     },
+    // Oldest-due first so a capped invocation (e.g. the external cron route,
+    // bounded by a serverless function timeout) doesn't starve watches that
+    // have been waiting longest.
+    orderBy: { nextCheckAt: "asc" },
+    ...(limit ? { take: limit } : {}),
     include: { restaurant: true, user: true },
   });
 
