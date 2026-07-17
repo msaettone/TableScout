@@ -17,7 +17,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/dashboard";
 
-  const [step, setStep] = useState<"email" | "sent" | "confirm" | "completing">("email");
+  const [step, setStep] = useState<"email" | "sent" | "confirm" | "ready" | "completing">("email");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -59,14 +59,19 @@ function LoginForm() {
 
     const storedEmail = getStoredEmail();
     if (storedEmail) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- kicking off async completion on mount
-      finishSignIn(storedEmail);
+      // Don't auto-complete on page load: some spam/link-safety scanners
+      // fetch (and sometimes render) email links before a human ever
+      // clicks them, which can burn Firebase's single-use sign-in code
+      // before the real click happens. Requiring an explicit tap here
+      // means only a genuine user action can consume it.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail(storedEmail);
+      setStep("ready");
     } else {
       // Link opened on a different device/browser than it was requested
       // from — ask them to confirm the email it was sent to.
       setStep("confirm");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onSubmitEmail(e: React.FormEvent) {
@@ -181,6 +186,21 @@ function LoginForm() {
               Continue
             </Button>
           </form>
+        )}
+
+        {step === "ready" && (
+          <div className="space-y-4 text-center">
+            <div>
+              <h1 className="font-serif text-2xl text-(--color-text-primary)">Almost there</h1>
+              <p className="mt-1 text-sm text-(--color-text-secondary)">
+                Confirm sign-in as <span className="font-medium">{email}</span>.
+              </p>
+            </div>
+            {error && <p className="text-sm text-(--color-coral)">{error}</p>}
+            <Button onClick={() => finishSignIn(email)} className="w-full">
+              Finish signing in
+            </Button>
+          </div>
         )}
 
         {step === "completing" && (
