@@ -139,45 +139,75 @@ async function attemptAutoBook(
   const matchedSlotTime = match.date.start.slice(11, 16);
   const day = w.targetDate.toISOString().slice(0, 10);
 
+  async function markDepositRequired() {
+    if (w.status !== WatchStatus.STRIKE_MODE) {
+      await transition(
+        w.id,
+        w.userId,
+        w.restaurant.name,
+        w.status,
+        WatchStatus.STRIKE_MODE,
+        NotificationType.STRIKE_MODE,
+        `a table opened at ${matchedSlotTime}, but it needs a deposit — book it directly on Resy or tap Book now.`,
+        {
+          matchedSlotToken: match.config.token,
+          matchedSlotTime,
+          lastCheckedAt: new Date(now),
+          nextCheckAt: new Date(now + MINUTE),
+        }
+      );
+    } else {
+      await prisma.watch.update({
+        where: { id: w.id },
+        data: {
+          matchedSlotToken: match.config.token,
+          matchedSlotTime,
+          lastCheckedAt: new Date(now),
+          nextCheckAt: new Date(now + MINUTE),
+        },
+      });
+    }
+  }
+
+  let bookToken: string;
   try {
-    const { bookToken, paymentType } = await getBookingToken({
+    const tokenResult = await getBookingToken({
       authToken,
       configToken: match.config.token,
       day,
       partySize: w.partySize,
     });
 
-    if (paymentType !== "free") {
-      if (w.status !== WatchStatus.STRIKE_MODE) {
-        await transition(
-          w.id,
-          w.userId,
-          w.restaurant.name,
-          w.status,
-          WatchStatus.STRIKE_MODE,
-          NotificationType.STRIKE_MODE,
-          `a table opened at ${matchedSlotTime}, but it needs a deposit — book it directly on Resy or tap Book now.`,
-          {
-            matchedSlotToken: match.config.token,
-            matchedSlotTime,
-            lastCheckedAt: new Date(now),
-            nextCheckAt: new Date(now + MINUTE),
-          }
-        );
-      } else {
-        await prisma.watch.update({
-          where: { id: w.id },
-          data: {
-            matchedSlotToken: match.config.token,
-            matchedSlotTime,
-            lastCheckedAt: new Date(now),
-            nextCheckAt: new Date(now + MINUTE),
-          },
-        });
-      }
+    // Resy sometimes rejects the token request outright with 402 for
+    // deposit-required slots (caught below) rather than returning a normal
+    // response with paymentType set — this check covers the case where it
+    // *does* come back normally but flagged as non-free.
+    if (tokenResult.paymentType !== "free") {
+      await markDepositRequired();
       return;
     }
+    bookToken = tokenResult.bookToken;
+  } catch (err) {
+    if (err instanceof ResyError && err.code === "PAYMENT_REQUIRED") {
+      await markDepositRequired();
+      return;
+    }
+    console.error(`getBookingToken failed for watch ${w.id}:`, err);
+    await prisma.notification.create({
+      data: {
+        watchId: w.id,
+        type: NotificationType.INFO,
+        message: `a table opened at ${matchedSlotTime} but we lost the race to book it — still watching.`,
+      },
+    });
+    await prisma.watch.update({
+      where: { id: w.id },
+      data: { lastCheckedAt: new Date(now), nextCheckAt: new Date(now + 30_000) },
+    });
+    return;
+  }
 
+  try {
     const { reservationId } = await resyBook({ authToken, bookToken });
 
     await transition(
