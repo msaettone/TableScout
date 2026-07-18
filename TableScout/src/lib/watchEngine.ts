@@ -169,45 +169,23 @@ async function attemptAutoBook(
     }
   }
 
-  let bookToken: string;
   try {
-    const tokenResult = await getBookingToken({
+    const { bookToken, paymentType } = await getBookingToken({
       authToken,
       configToken: match.config.token,
       day,
       partySize: w.partySize,
     });
 
-    // Resy sometimes rejects the token request outright with 402 for
-    // deposit-required slots (caught below) rather than returning a normal
-    // response with paymentType set — this check covers the case where it
-    // *does* come back normally but flagged as non-free.
-    if (tokenResult.paymentType !== "free") {
+    // Usually paymentType flags a deposit-required slot up front, but Resy
+    // has also been seen reporting "free" here and then rejecting the
+    // actual /3/book call with 402 anyway (caught below) — both cases route
+    // to the same manual fallback.
+    if (paymentType !== "free") {
       await markDepositRequired();
       return;
     }
-    bookToken = tokenResult.bookToken;
-  } catch (err) {
-    if (err instanceof ResyError && err.code === "PAYMENT_REQUIRED") {
-      await markDepositRequired();
-      return;
-    }
-    console.error(`getBookingToken failed for watch ${w.id}:`, err);
-    await prisma.notification.create({
-      data: {
-        watchId: w.id,
-        type: NotificationType.INFO,
-        message: `a table opened at ${matchedSlotTime} but we lost the race to book it — still watching.`,
-      },
-    });
-    await prisma.watch.update({
-      where: { id: w.id },
-      data: { lastCheckedAt: new Date(now), nextCheckAt: new Date(now + 30_000) },
-    });
-    return;
-  }
 
-  try {
     const { reservationId } = await resyBook({ authToken, bookToken });
 
     await transition(
@@ -226,6 +204,10 @@ async function attemptAutoBook(
       }
     );
   } catch (err) {
+    if (err instanceof ResyError && err.code === "PAYMENT_REQUIRED") {
+      await markDepositRequired();
+      return;
+    }
     // Someone else grabbed it first (or a transient error) — nothing left
     // to book. Note it and keep watching rather than crash the tick loop.
     console.error(`auto-book attempt failed for watch ${w.id}:`, err);
